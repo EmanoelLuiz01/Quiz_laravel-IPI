@@ -17,6 +17,10 @@ treino-laravel/
     └── ...
 ```
 
+## Progresso salvo
+
+A rodada em andamento, os minitestes marcados e a opção de embaralhar ficam salvos no navegador (`localStorage`). Ao reabrir, a questão em que você parou aparece direto; em "← Início" há o botão "Continuar". O progresso vale por navegador/aparelho.
+
 ## Como adicionar um miniteste
 
 1. Crie `data/10-nome.js` com `registrarTeste({ id, titulo, questoes: [...] })`.

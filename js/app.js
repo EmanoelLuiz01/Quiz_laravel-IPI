@@ -21,11 +21,55 @@
     i: 0,
     acertos: 0,
     erradas: [],
+    ativa: false, // há uma rodada em andamento?
   };
+
+  // ---- Progresso salvo no navegador (localStorage) ----
+  const CHAVE = "treino-laravel:v1";
+  const porId = {};
+  TESTES.forEach((t) => t.questoes.forEach((q, n) => {
+    q.id = `${t.id}:${n}`;
+    porId[q.id] = q;
+  }));
+
+  function salvar() {
+    const dados = {
+      selecionados: [...estado.selecionados],
+      embaralhar: estado.embaralhar,
+      sessao: estado.ativa ? {
+        fila: estado.fila.map((q) => q.id),
+        i: estado.i,
+        acertos: estado.acertos,
+        erradas: estado.erradas.map((q) => q.id),
+      } : null,
+    };
+    try { localStorage.setItem(CHAVE, JSON.stringify(dados)); } catch (e) {}
+  }
+
+  function carregar() {
+    let d = {};
+    try { d = JSON.parse(localStorage.getItem(CHAVE)) || {}; } catch (e) {}
+    if (Array.isArray(d.selecionados)) {
+      estado.selecionados = new Set(d.selecionados.filter((id) => TESTES.some((t) => t.id === id)));
+    }
+    if (typeof d.embaralhar === "boolean") estado.embaralhar = d.embaralhar;
+    const s = d.sessao;
+    if (s && Array.isArray(s.fila) && s.fila.length && s.fila.every((id) => porId[id]) && s.i < s.fila.length) {
+      estado.fila = s.fila.map((id) => porId[id]);
+      estado.i = s.i;
+      estado.acertos = s.acertos || 0;
+      estado.erradas = (s.erradas || []).filter((id) => porId[id]).map((id) => porId[id]);
+      estado.ativa = true;
+    }
+  }
 
   function telaInicial() {
     app.innerHTML = `<h1>Treino — Laravel</h1>
       <p class="s">Escolha os minitestes e comece.</p>
+      ${estado.ativa ? `<div class="card"><b>Rodada em andamento</b>
+        <p class="s" style="margin:4px 0 10px">Questão ${estado.i + 1} de ${estado.fila.length} · ${estado.acertos} acertos</p>
+        <div class="row" style="margin-top:0"><button class="btn" id="cont">Continuar</button>
+        <button class="btn g" id="desc">Descartar</button></div></div>` : ""}
       <div class="grid">${TESTES.map((t) => `
         <button class="t ${estado.selecionados.has(t.id) ? "on" : ""}" data-id="${t.id}">
           <span>${t.titulo}</span><small>${t.questoes.length} questões</small>
@@ -33,12 +77,17 @@
       <label><input type="checkbox" id="emb" ${estado.embaralhar ? "checked" : ""}> Embaralhar questões e alternativas</label>
       <div class="row"><button class="btn" id="go" ${estado.selecionados.size ? "" : "disabled"}>Começar</button></div>`;
 
+    if (estado.ativa) {
+      $("#cont").onclick = mostrarQuestao;
+      $("#desc").onclick = () => { estado.ativa = false; salvar(); telaInicial(); };
+    }
     app.querySelectorAll(".t").forEach((b) => (b.onclick = () => {
       const id = b.dataset.id;
       estado.selecionados.has(id) ? estado.selecionados.delete(id) : estado.selecionados.add(id);
+      salvar();
       telaInicial();
     }));
-    $("#emb").onchange = (e) => (estado.embaralhar = e.target.checked);
+    $("#emb").onchange = (e) => { estado.embaralhar = e.target.checked; salvar(); };
     $("#go").onclick = () => iniciar(
       TESTES.filter((t) => estado.selecionados.has(t.id)).flatMap((t) => t.questoes)
     );
@@ -49,10 +98,12 @@
     estado.i = 0;
     estado.acertos = 0;
     estado.erradas = [];
+    estado.ativa = true;
     mostrarQuestao();
   }
 
   function mostrarQuestao() {
+    salvar();
     const q = estado.fila[estado.i];
     const total = estado.fila.length;
     let opcoes = q.alternativas.map((texto, n) => ({ texto, certa: n === q.correta }));
@@ -96,6 +147,8 @@
   }
 
   function mostrarResultado() {
+    estado.ativa = false;
+    salvar();
     const total = estado.fila.length;
     const pct = Math.round((estado.acertos / total) * 100);
     app.innerHTML = `<h1>Resultado</h1>
@@ -109,5 +162,6 @@
     $("#inicio").onclick = telaInicial;
   }
 
-  telaInicial();
+  carregar();
+  estado.ativa ? mostrarQuestao() : telaInicial();
 })();
